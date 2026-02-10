@@ -105,3 +105,50 @@ public void saveToOutbox(Object event) {
 common/src/main/java/com/back/global/outbox/
 └── OutboxPublisher.java
 ```
+
+---
+
+# 0003 - OutboxPoller
+
+## 개요
+주기적으로 Outbox 테이블을 폴링하여 Kafka로 발행하는 스케줄러
+
+## 핵심 로직
+```java
+@Scheduled(fixedDelayString = "${outbox.poller.interval-ms:5000}")
+@Transactional
+public void pollAndPublish() {
+    // 1. PENDING 상태 이벤트 조회 (배치 크기만큼)
+    // 2. 각 이벤트에 대해:
+    //    - PROCESSING으로 상태 변경
+    //    - Kafka로 발행
+    //    - 성공 시 SENT, 실패 시 PENDING (재시도) 또는 FAILED
+}
+```
+
+## 설정
+```yaml
+outbox:
+  poller:
+    enabled: true          # 폴러 활성화
+    interval-ms: 5000      # 폴링 주기 (5초)
+    batch-size: 100        # 배치 크기
+    max-retry: 5           # 최대 재시도 횟수
+  cleanup:
+    cron: "0 0 3 * * *"    # 정리 스케줄 (매일 새벽 3시)
+```
+
+## 재시도 전략
+- 발행 실패 시 `retryCount` 증가
+- `retryCount < maxRetry`: PENDING으로 복귀 (다음 폴링에서 재시도)
+- `retryCount >= maxRetry`: FAILED로 변경 (수동 처리 필요)
+
+## 정리 스케줄
+- 매일 새벽 3시 실행
+- 7일 이상 지난 SENT 이벤트 삭제
+
+## 변경 파일
+```
+common/src/main/java/com/back/global/outbox/
+└── OutboxPoller.java
+```
