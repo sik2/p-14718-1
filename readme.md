@@ -213,3 +213,50 @@ common/src/main/java/com/back/global/
 └── kafka/
     └── KafkaConfig.java
 ```
+
+---
+
+# 0005 - cash, market 서비스 Outbox 적용
+
+## 개요
+실시간 결제 흐름을 담당하는 cash, market 서비스에 Outbox 패턴 우선 적용
+
+## 결제 흐름
+```
+market-service                    cash-service
+     │                                 │
+     │ MarketOrderPaymentRequested     │
+     │ ─────────────────────────────>  │
+     │                                 │ (결제 처리)
+     │ CashOrderPaymentSucceeded       │
+     │ <─────────────────────────────  │
+     │                                 │
+     │ MarketOrderPaymentCompleted     │
+     │ ─────────────────────────────>  │ (→ payout-service)
+```
+
+## 적용 이유
+- **결제/정산**: 메시지 유실 시 금전적 손해 발생
+- **트랜잭션 원자성**: 결제 처리와 이벤트 발행의 일관성 필수
+- **재시도 보장**: 네트워크 장애 시 자동 재시도
+
+## 설정
+```yaml
+# cash-service, market-service
+outbox:
+  enabled: true
+  poller:
+    enabled: true
+    interval-ms: 5000
+    batch-size: 100
+    max-retry: 5
+```
+
+## 변경 파일
+```
+cash-service/src/main/resources/
+└── application.yml
+
+market-service/src/main/resources/
+└── application.yml
+```

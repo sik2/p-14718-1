@@ -57,6 +57,16 @@ custom:
     product:
       payoutRate: ${MARKET_PRODUCT_PAYOUT_RATE:90}
 
+outbox:
+  enabled: true
+  poller:
+    enabled: true
+    interval-ms: 5000
+    batch-size: 100
+    max-retry: 5
+  cleanup:
+    cron: "0 0 3 * * *"
+
 logging:
   level:
     org.hibernate.SQL: DEBUG
