@@ -248,3 +248,47 @@ cash-service/src/main/resources/
 market-service/src/main/resources/
 └── application.yml
 ```
+
+---
+
+# 0006 - payout 서비스 Outbox 적용
+
+## 개요
+배치 정산 흐름을 담당하는 payout 서비스에 Outbox 패턴 적용
+
+## 정산 흐름
+```
+market-service                    payout-service                   cash-service
+     │                                 │                                │
+     │ MarketOrderPaymentCompleted     │                                │
+     │ ─────────────────────────────>  │                                │
+     │                                 │ (정산 후보 등록)                 │
+     │                                 │                                │
+     │                                 │ (배치: 정산 집계/완료)           │
+     │                                 │                                │
+     │                                 │ PayoutCompletedEvent           │
+     │                                 │ ─────────────────────────────> │
+     │                                 │                                │ (지갑 입금)
+```
+
+## 적용 이유
+- **정산 완료 이벤트**: 금액 정산 결과 전달, 유실 불가
+- **배치 처리**: 대량 정산 후 이벤트 발행의 원자성 필요
+
+## 설정
+```yaml
+# payout-service
+outbox:
+  enabled: true
+  poller:
+    enabled: true
+    interval-ms: 5000
+    batch-size: 100
+    max-retry: 5
+```
+
+## 변경 파일
+```
+payout-service/src/main/resources/
+└── application.yml
+```
