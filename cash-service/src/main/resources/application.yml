@@ -1,0 +1,61 @@
+server:
+  port: 8083
+
+spring:
+  application:
+    name: cash-service
+  config:
+    import: optional:file:.env[.properties]
+  kafka:
+    bootstrap-servers: localhost:9092
+  profiles:
+    active: dev
+  output:
+    ansi:
+      enabled: always
+  datasource:
+    url: jdbc:h2:./db_dev;MODE=MYSQL
+    driver-class-name: org.h2.Driver
+    username: sa
+    password:
+  jpa:
+    hibernate:
+      ddl-auto: update
+    properties:
+      hibernate:
+        default_batch_fetch_size: 100
+        format_sql: true
+        highlight_sql: true
+        use_sql_comments: true
+  h2:
+    console:
+      enabled: true
+      path: /h2-console
+  batch:
+    job:
+      enabled: false
+    jdbc:
+      initialize-schema: never
+
+custom:
+  system:
+    apiKey: ${SYSTEM_API_KEY}
+  services:
+    member-url: http://localhost:8080
+    post-url: http://localhost:8081
+    payout-url: http://localhost:8082
+    cash-url: http://localhost:8083
+    market-url: http://localhost:8084
+  global:
+    internalBackUrl: http://localhost:${server.port}
+    holdingMemberId: 2
+  jwt:
+    secretKey: ${JWT_SECRET_KEY}
+  accessToken:
+    expirationSeconds: "#{60*60}"
+
+logging:
+  level:
+    org.hibernate.SQL: DEBUG
+    org.hibernate.orm.jdbc.bind: TRACE
+    org.hibernate.orm.jdbc.extract: TRACE

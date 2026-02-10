@@ -1,0 +1,46 @@
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: backend-ingress
+  namespace: backend
+spec:
+  ingressClassName: traefik
+  rules:
+    - host: api.127.0.0.1.nip.io
+      http:
+        paths:
+          - path: /api/v1/member
+            pathType: Prefix
+            backend:
+              service:
+                name: member-service
+                port:
+                  number: 8080
+          - path: /api/v1/post
+            pathType: Prefix
+            backend:
+              service:
+                name: post-service
+                port:
+                  number: 8080
+          - path: /api/v1/market
+            pathType: Prefix
+            backend:
+              service:
+                name: market-service
+                port:
+                  number: 8080
+          - path: /api/v1/cash
+            pathType: Prefix
+            backend:
+              service:
+                name: cash-service
+                port:
+                  number: 8080
+          - path: /api/v1/payout
+            pathType: Prefix
+            backend:
+              service:
+                name: payout-service
+                port:
+                  number: 8080
