@@ -37,6 +37,15 @@ logging:
     org.hibernate.orm.jdbc.bind: TRACE
     org.hibernate.orm.jdbc.extract: TRACE
     org.springframework.transaction.interceptor: TRACE
+outbox:
+  enabled: true
+  poller:
+    enabled: true
+    interval-ms: 5000
+    batch-size: 100
+    max-retry: 5
+  cleanup:
+    cron: "0 0 3 * * *"
 custom:
   system:
     apiKey: ${SYSTEM_API_KEY}

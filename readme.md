@@ -304,3 +304,96 @@ outbox:
 payout-service/src/main/resources/
 └── application.yml
 ```
+
+---
+
+# 0007 - member, post 서비스 Outbox 적용
+
+## 개요
+나머지 서비스(member, post)에 Outbox 패턴 적용 완료
+
+## 이벤트 흐름
+```
+member-service                    post-service / 기타 서비스
+     │                                 │
+     │ MemberJoinedEvent              │
+     │ ─────────────────────────────> │ (회원 정보 동기화)
+     │                                 │
+     │ MemberModifiedEvent            │
+     │ ─────────────────────────────> │ (회원 정보 업데이트)
+
+post-service                      payout-service
+     │                                 │
+     │ PostCreatedEvent               │
+     │ ─────────────────────────────> │ (작성자 활동 추적)
+     │                                 │
+     │ PostCommentCreatedEvent        │
+     │ ─────────────────────────────> │ (댓글 활동 추적)
+```
+
+## 적용 이유
+- **전체 서비스 일관성**: 모든 서비스에서 동일한 이벤트 발행 패턴 사용
+- **데이터 동기화**: 회원/게시글 정보 변경의 안정적인 전파
+- **운영 단순화**: 단일 메시징 패턴으로 모니터링/디버깅 용이
+
+## 설정
+```yaml
+# member-service, post-service
+outbox:
+  enabled: true
+  poller:
+    enabled: true
+    interval-ms: 5000
+    batch-size: 100
+    max-retry: 5
+```
+
+## 변경 파일
+```
+member-service/src/main/resources/
+└── application.yml
+
+post-service/src/main/resources/
+└── application.yml
+```
+
+---
+
+# 전체 Outbox 적용 완료
+
+## 서비스별 Outbox 상태
+| 서비스 | Outbox 적용 | 주요 이벤트 |
+|--------|-------------|-------------|
+| member-service | ✅ | MemberJoined, MemberModified |
+| post-service | ✅ | PostCreated, PostCommentCreated |
+| payout-service | ✅ | PayoutCompleted |
+| cash-service | ✅ | CashOrderPaymentSucceeded/Failed |
+| market-service | ✅ | MarketOrderPaymentRequested/Completed |
+
+## 아키텍처 다이어그램
+```
+┌─────────────────────────────────────────────────────────────────┐
+│                        각 마이크로서비스                          │
+│  ┌─────────────┐    ┌─────────────┐    ┌─────────────────────┐  │
+│  │ 도메인 로직  │───>│ Outbox 저장 │───>│ outbox_event 테이블 │  │
+│  └─────────────┘    └─────────────┘    └─────────────────────┘  │
+│         │                                        │              │
+│         │ 같은 트랜잭션                           │ 폴링         │
+│         ▼                                        ▼              │
+│  ┌─────────────┐                       ┌─────────────────────┐  │
+│  │  DB 커밋    │                       │   OutboxPoller      │  │
+│  └─────────────┘                       └─────────────────────┘  │
+│                                                  │              │
+└──────────────────────────────────────────────────│──────────────┘
+                                                   │
+                                                   ▼
+                                          ┌───────────────┐
+                                          │     Kafka     │
+                                          └───────────────┘
+```
+
+## 핵심 보장
+1. **원자성**: DB 트랜잭션과 메시지 발행이 함께 성공/실패
+2. **최소 1회 전달**: 재시도로 메시지 유실 방지
+3. **순서 보장**: 동일 Aggregate의 이벤트는 생성 순서대로 발행
+4. **멱등성 권장**: Consumer는 중복 메시지 처리 대비 필요
