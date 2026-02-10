@@ -1,14 +1,7 @@
-# Outbox Pattern 구현
+# Outbox Pattern 기반 마이크로서비스
 
 ## 개요
-Spring Boot 4.0.1 + Kafka 기반 마이크로서비스 아키텍처에 Outbox 패턴을 적용하여 DB 트랜잭션과 메시지 발행의 원자성을 보장합니다.
-
-## 기술 스택
-- Java 25
-- Spring Boot 4.0.1
-- Spring Data JPA
-- Spring Kafka (Redpanda)
-- MySQL / H2
+Spring Boot 4.0.1 + Kafka 기반 마이크로서비스에 Outbox 패턴을 적용하여 DB 트랜잭션과 메시지 발행의 원자성을 보장합니다.
 
 ## 서비스 구성
 | 서비스 | 포트 | 설명 |
@@ -19,58 +12,55 @@ Spring Boot 4.0.1 + Kafka 기반 마이크로서비스 아키텍처에 Outbox �
 | cash-service | 8083 | 지갑/결제 관리 |
 | market-service | 8084 | 상품/주문 관리 |
 
-## Outbox 패턴 구조
+---
 
-### 기존 문제
-```
-도메인 → EventPublisher → Kafka 직접 발행
-                              ↑
-                        원자성 보장 안됨
-                        (DB 커밋 후 Kafka 실패 시 메시지 유실)
-```
+# 0001 - Outbox 엔티티 및 Repository
 
-### Outbox 패턴 적용 후
-```
-도메인 → EventPublisher → OutboxPublisher → OUTBOX_EVENT 테이블 (같은 트랜잭션)
-                                                    ↓
-                              OutboxPoller (5초 폴링) → Kafka
-```
+## 개요
+Outbox 패턴의 핵심 데이터 모델 구현
 
-### 핵심 컴포넌트
-| 컴포넌트 | 역할 |
-|----------|------|
-| OutboxEvent | Outbox 테이블 엔티티 |
-| OutboxPublisher | 이벤트를 Outbox 테이블에 저장 |
-| OutboxPoller | 주기적으로 Outbox 조회 후 Kafka 발행 |
-
-## 실행 방법
-
-### 로컬 개발
-```bash
-# Kafka(Redpanda) 실행
-docker-compose up -d
-
-# 서비스 실행
-./gradlew :member-service:bootRun
-./gradlew :post-service:bootRun
-./gradlew :cash-service:bootRun
-./gradlew :market-service:bootRun
-./gradlew :payout-service:bootRun
+## OutboxStatus
+```java
+public enum OutboxStatus {
+    PENDING,      // 대기: 생성됨, 발송 전
+    PROCESSING,   // 처리중: 발송 시도 중
+    SENT,         // 성공: 발송 완료
+    FAILED        // 실패: 발송 실패
+}
 ```
 
-### Kubernetes 배포
-```bash
-kubectl apply -k k8s/
+### 상태 흐름
+```
+PENDING → PROCESSING → SENT
+                     ↘ FAILED
 ```
 
-## 설정
+## OutboxEvent 엔티티
+| 필드 | 타입 | 설명 |
+|------|------|------|
+| id | Long | PK |
+| aggregateType | String | 집합체 타입 (Order, Member 등) |
+| aggregateId | String | 집합체 ID |
+| eventType | String | 이벤트 클래스명 |
+| topic | String | Kafka 토픽 |
+| payload | LONGTEXT | JSON 페이로드 |
+| status | OutboxStatus | PENDING/PROCESSING/SENT/FAILED |
+| createDate | LocalDateTime | 생성 시각 |
+| sentDate | LocalDateTime | 발송 완료 시각 |
+| retryCount | int | 재시도 횟수 |
+| lastErrorMessage | String | 마지막 에러 메시지 |
+| version | Long | 낙관적 락 |
 
-### Outbox 설정 (application.yml)
-```yaml
-outbox:
-  enabled: true
-  poller:
-    interval-ms: 5000      # 폴링 주기
-    batch-size: 100        # 배치 크기
-    max-retry: 5           # 최대 재시도
+### 인덱스 전략
+- `idx_outbox_status_created`: 폴링 시 PENDING 상태 조회 최적화
+- `idx_outbox_aggregate`: 특정 Aggregate 이벤트 조회
+
+## 변경 파일
+```
+common/src/main/java/com/back/global/outbox/
+├── entity/
+│   ├── OutboxEvent.java
+│   └── OutboxStatus.java
+└── repository/
+    └── OutboxEventRepository.java
 ```
