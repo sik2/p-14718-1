@@ -164,3 +164,52 @@ outbox:
 common/src/main/java/com/back/global/outbox/
 └── OutboxPoller.java
 ```
+
+---
+
+# 0004 - EventPublisher 및 KafkaConfig 수정
+
+## 개요
+기존 EventPublisher를 Outbox 패턴과 통합하고, 병행 운영 모드 지원
+
+## EventPublisher 변경
+```java
+@Value("${outbox.enabled:false}")
+private boolean outboxEnabled;
+
+public void publish(Object event) {
+    // 로컬 이벤트 발행 (동일 서비스 내 리스너)
+    applicationEventPublisher.publishEvent(event);
+
+    // 원격 이벤트 발행
+    if (outboxEnabled) {
+        outboxPublisher.saveToOutbox(event);  // Outbox 패턴
+    } else {
+        kafkaEventPublisher.publish(event);   // 기존 방식
+    }
+}
+```
+
+## 병행 운영 모드
+- `outbox.enabled=false`: 기존 Kafka 직접 발행 (기본값)
+- `outbox.enabled=true`: Outbox 패턴 사용
+
+## KafkaConfig 변경
+Outbox용 KafkaTemplate 추가:
+```java
+@Bean
+public KafkaTemplate<String, String> outboxKafkaTemplate() {
+    // acks=all: 모든 복제본에 기록 확인
+    // enable.idempotence=true: 멱등성 보장
+    // retries=3: 재시도 횟수
+}
+```
+
+## 변경 파일
+```
+common/src/main/java/com/back/global/
+├── eventPublisher/
+│   └── EventPublisher.java
+└── kafka/
+    └── KafkaConfig.java
+```
