@@ -385,3 +385,58 @@ post-service/src/main/resources/
 2. **최소 1회 전달**: 재시도로 메시지 유실 방지
 3. **순서 보장**: 동일 Aggregate의 이벤트는 생성 순서대로 발행
 4. **멱등성 권장**: Consumer는 중복 메시지 처리 대비 필요
+
+---
+
+# 0008 - Debezium 인프라 설정
+
+## 개요
+CDC(Change Data Capture) 기반 Outbox 패턴을 위한 Debezium 인프라 구성
+
+## Polling vs CDC 비교
+| 방식 | 지연시간 | DB 부하 | 인프라 |
+|------|----------|---------|--------|
+| Polling | 5초 | 주기적 쿼리 | 없음 |
+| CDC | ~ms | binlog 읽기 | Debezium |
+
+## 아키텍처
+```
+┌─────────────┐     ┌─────────────┐     ┌──────────────┐     ┌─────────┐
+│ Application │────>│   MySQL     │────>│   Debezium   │────>│  Kafka  │
+│             │     │  (binlog)   │     │  (Connector) │     │         │
+└─────────────┘     └─────────────┘     └──────────────┘     └─────────┘
+       │                                        │
+       │ INSERT INTO outbox_event              │ binlog 감지
+       └────────────────────────────────────────┘
+```
+
+## MySQL binlog 설정
+```yaml
+# docker-compose.yml
+mysql-service:
+  command: --server-id=1 --log-bin=mysql-bin --binlog-format=ROW --binlog-row-image=FULL
+```
+
+## Debezium 컨테이너
+```yaml
+# docker-compose.yml
+debezium:
+  profiles:
+    - cdc
+  image: debezium/connect:2.5
+  ports:
+    - "8083:8083"
+  environment:
+    BOOTSTRAP_SERVERS: redpanda:29092
+```
+
+## Connector 등록
+```bash
+./script/register-debezium-connector.sh
+```
+
+## 변경 파일
+```
+docker-compose.yml                          # Debezium 컨테이너 추가
+script/register-debezium-connector.sh       # Connector 등록 스크립트
+```
