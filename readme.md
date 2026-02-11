@@ -440,3 +440,44 @@ debezium:
 docker-compose.yml                          # Debezium 컨테이너 추가
 script/register-debezium-connector.sh       # Connector 등록 스크립트
 ```
+
+---
+
+# 0009 - CDC 모드 전환
+
+## 개요
+CDC 사용 시 OutboxPoller 비활성화 방법
+
+## 모드 비교
+| 모드 | Poller | 이벤트 발행 |
+|------|--------|-------------|
+| Polling | `enabled: true` | OutboxPoller (5초마다) |
+| CDC | `enabled: false` | Debezium (binlog 즉시) |
+
+## OutboxPoller 조건부 생성
+```java
+@ConditionalOnProperty(name = "outbox.poller.enabled", havingValue = "true", matchIfMissing = true)
+public class OutboxPoller {
+```
+- `outbox.poller.enabled=true` → Poller 빈 생성
+- `outbox.poller.enabled=false` → Poller 빈 생성 안됨
+
+## CDC 모드 전환
+```yaml
+# application.yml
+outbox:
+  poller:
+    enabled: false  # CDC 사용 시 false로 변경
+```
+
+## 실행 방법
+```bash
+# 1. Debezium 실행
+docker-compose --profile cdc up -d
+
+# 2. Connector 등록
+./script/register-debezium-connector.sh
+
+# 3. 서비스 실행
+./gradlew :member-service:bootRun
+```
