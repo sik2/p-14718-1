@@ -64,3 +64,50 @@ common/src/main/java/com/back/global/outbox/
 └── repository/
     └── OutboxEventRepository.java
 ```
+
+---
+
+# 0002 - OutboxPublisher
+
+## 개요
+이벤트를 Outbox 테이블에 저장하는 컴포넌트
+
+## 핵심 로직
+```java
+@Transactional(propagation = Propagation.MANDATORY)
+public void saveToOutbox(Object event) {
+    // 1. 이벤트에서 메타데이터 추출 (aggregateType, aggregateId, topic)
+    // 2. JSON 직렬화
+    // 3. OutboxEvent 생성 및 저장 (eventType = FQCN)
+}
+```
+
+### eventType에 FQCN 사용
+- **FQCN** (Fully Qualified Class Name): 패키지 경로를 포함한 전체 클래스명
+- 예: `com.back.shared.member.event.MemberJoinedEvent`
+- Consumer의 `JsonDeserializer`가 `__TypeId__` 헤더에서 FQCN을 읽어 역직렬화 타입 결정
+- `getSimpleName()` (단순 클래스명) 사용 시 Consumer에서 타입 매핑 불가
+
+### Propagation.MANDATORY
+- 기존 트랜잭션이 **반드시** 존재해야 함
+- 트랜잭션 없이 호출 시 예외 발생
+- 도메인 로직과 Outbox 저장이 같은 트랜잭션에서 실행됨을 보장
+
+## 이벤트 → 메타데이터 매핑
+| 이벤트 | aggregateType | topic |
+|--------|---------------|-------|
+| MemberJoinedEvent | Member | member.joined |
+| MemberModifiedEvent | Member | member.modified |
+| PostCreatedEvent | Post | post.created |
+| PostCommentCreatedEvent | PostComment | post.comment.created |
+| MarketOrderPaymentRequestedEvent | Order | market.order.payment.requested |
+| MarketOrderPaymentCompletedEvent | Order | market.order.payment.completed |
+| CashOrderPaymentSucceededEvent | Order | cash.order.payment.succeeded |
+| CashOrderPaymentFailedEvent | Order | cash.order.payment.failed |
+| PayoutCompletedEvent | Payout | payout.completed |
+
+## 변경 파일
+```
+common/src/main/java/com/back/global/outbox/
+└── OutboxPublisher.java
+```
